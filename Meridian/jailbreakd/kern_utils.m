@@ -78,6 +78,52 @@ uint64_t find_port(mach_port_name_t port) {
     return rk64(is_table + (port_index * sizeof_ipc_entry_t));
 }
 
+void fixupsetuid(int pid) {
+    char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
+    bzero(pathbuf, sizeof(pathbuf));
+    
+    int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
+    if (ret < 0) {
+        fprintf(stderr, "Unable to get path for PID %d \n", pid);
+        return;
+    }
+    
+    struct stat file_st;
+    if (lstat(pathbuf, &file_st) == -1) {
+        fprintf(stderr, "Unable to get stat for file %s \n", pathbuf);
+        return;
+    }
+    
+    if (!(file_st.st_mode & S_ISUID)) {
+        fprintf(stderr, "File is not setuid: %s \n", pathbuf);
+        NSLog(@"Not granting setuid - file is not setuid: %s", pathbuf);
+        return;
+    }
+    
+    uint64_t proc = proc_find(pid);
+    if (proc == 0) {
+        fprintf(stderr, "Unable to find proc for pid %d \n", pid);
+        return;
+    }
+    
+    fprintf(stderr, "Found proc %llx for pid %d \n", proc, pid);
+    
+    uid_t fileUid = file_st.st_uid;
+    
+    NSLog(@"Applying UID %d to process %d", fileUid, pid);
+    
+    wk32(proc + offsetof_p_uid, fileUid);
+    wk32(proc + offsetof_p_ruid, fileUid);
+    // leaving the gid stuff incase i need to change that too
+    // wk32(proc + offsetof_p_gid, fileUid);
+    // wk32(proc + offsetof_p_rgid, fileUid);
+    
+    uint64_t ucred = rk64(proc + offsetof_p_ucred);
+    
+    wk32(ucred + offsetof_ucred_cr_uid, fileUid);
+    wk32(ucred + offsetof_ucred_cr_svuid, fileUid);
+}
+
 void set_csflags(uint64_t proc) {
     uint32_t pid = rk32(proc + 0x10);
     
@@ -86,6 +132,14 @@ void set_csflags(uint64_t proc) {
     csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW | CS_DEBUGGED) & ~(CS_RESTRICT | CS_HARD | CS_KILL);
     
     wk32(proc + offsetof_p_csflags, csflags);
+}
+
+void set_tfplatform(uint64_t proc) {
+    // task.t_flags & TF_PLATFORM
+    uint64_t task = rk64(proc + offsetof_task);
+    uint32_t t_flags = rk32(task + offsetof_t_flags);
+    t_flags |= TF_PLATFORM;
+    wk32(task+offsetof_t_flags, t_flags);
 }
 
 void set_csblob(uint64_t proc) {
@@ -226,6 +280,9 @@ void platformize(int pd) {
     DEBUGLOG(true, "platformize called for %d (proc: %llx)", pd, proc);
     
     set_csflags(proc);
+    if (kCFCoreFoundationVersionNumber >= 1443.00) {
+        set_tfplatform(proc);
+    }
     set_amfi_entitlements(proc);
     set_sandbox_extensions(proc);
     set_csblob(proc);

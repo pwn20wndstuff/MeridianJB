@@ -86,7 +86,12 @@ int handle_command(uint8_t command, uint32_t pid) {
     }
     
     if (command == JAILBREAKD_COMMAND_FIXUP_SETUID) {
-        DEBUGLOG(true, "JAILBREAKD_FIXUP_SETUID PID: %d (ignored)", pid);
+        if (kCFCoreFoundationVersionNumber >= 1443.00) {
+            DEBUGLOG(true, "JAILBREAKD_FIXUP_SETUID PID: %d", pid);
+            fixupsetuid(pid);
+        } else {
+            DEBUGLOG(true, "JAILBREAKD_FIXUP_SETUID PID: %d (ignored)", pid);
+        }
     }
     
     return 0;

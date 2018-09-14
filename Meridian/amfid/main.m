@@ -97,17 +97,19 @@ int fake_MISValidateSignatureAndCopyInfo(NSString* file, NSDictionary* options, 
     
     INFO(@"magic was performed [%08x (%s)]: %@", ntohl(*(uint64_t *)cd_hash), hash_name, file);
     
-    // let's check entitlements, add platform-application if necessary
-    ret = fixup_platform_application(file.UTF8String,
-                                     file_off,
-                                     code_signature,
-                                     cs_length,
-                                     cd_hash,
-                                     cdir_offset,
-                                     entitlements);
-    
-    if (ret != 0) {
-        ERROR(@"fixup_platform_application returned: %d", ret);
+    if (kCFCoreFoundationVersionNumber < 1443.00) {
+        // let's check entitlements, add platform-application if necessary
+        ret = fixup_platform_application(file.UTF8String,
+                                         file_off,
+                                         code_signature,
+                                         cs_length,
+                                         cd_hash,
+                                         cdir_offset,
+                                         entitlements);
+        
+        if (ret != 0) {
+            ERROR(@"fixup_platform_application returned: %d", ret);
+        }
     }
     
     close_img(&img);
@@ -118,40 +120,42 @@ __attribute__ ((constructor))
 static void ctor(void) {
     INFO("preparing to fuck up amfid :)");
     
-    kern_return_t ret = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
-    if (ret != KERN_SUCCESS || tfp0 == MACH_PORT_NULL) {
-        ERROR("failed to get tfp0!");
-        return;
+    if (kCFCoreFoundationVersionNumber < 1443.00) {
+        kern_return_t ret = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
+        if (ret != KERN_SUCCESS || tfp0 == MACH_PORT_NULL) {
+            ERROR("failed to get tfp0!");
+            return;
+        }
+        INFO("got tfp0: %x", tfp0);
+        
+        NSDictionary *off_file = [NSDictionary dictionaryWithContentsOfFile:@"/meridian/offsets.plist"];
+        if (off_file == NULL) {
+            ERROR("failed to find the offsets file!");
+            return;
+        }
+        
+        kernel_base                 = strtoull([off_file[@"KernelBase"]           UTF8String], NULL, 16);
+        kernel_slide                = strtoull([off_file[@"KernelSlide"]          UTF8String], NULL, 16);
+        offset_zonemap              = strtoull([off_file[@"ZoneMap"]              UTF8String], NULL, 16) + kernel_slide;
+        offset_kernel_task          = strtoull([off_file[@"KernelTask"]           UTF8String], NULL, 16) + kernel_slide;
+        offset_vfs_context_current  = strtoull([off_file[@"VfsContextCurrent"]    UTF8String], NULL, 16) + kernel_slide;
+        offset_vnode_getfromfd      = strtoull([off_file[@"VnodeGetFromFD"]       UTF8String], NULL, 16) + kernel_slide;
+        offset_vnode_getattr        = strtoull([off_file[@"VnodeGetAttr"]         UTF8String], NULL, 16) + kernel_slide;
+        offset_vnode_put            = strtoull([off_file[@"VnodePut"]             UTF8String], NULL, 16) + kernel_slide;
+        offset_csblob_ent_dict_set  = strtoull([off_file[@"CSBlobEntDictSet"]     UTF8String], NULL, 16) + kernel_slide;
+        offset_sha1_init            = strtoull([off_file[@"SHA1Init"]             UTF8String], NULL, 16) + kernel_slide;
+        offset_sha1_update          = strtoull([off_file[@"SHA1Update"]           UTF8String], NULL, 16) + kernel_slide;
+        offset_sha1_final           = strtoull([off_file[@"SHA1Final"]            UTF8String], NULL, 16) + kernel_slide;
+        offset_add_x0_x0_0x40_ret   = strtoull([off_file[@"AddGadgetRet"]         UTF8String], NULL, 16);
+        offset_osboolean_true       = strtoull([off_file[@"OSBooleanTrue"]        UTF8String], NULL, 16);
+        offset_osboolean_false      = strtoull([off_file[@"OSBooleanFalse"]       UTF8String], NULL, 16);
+        offset_osunserialize_xml    = strtoull([off_file[@"OSUnserializeXML"]     UTF8String], NULL, 16);
+        offset_cs_find_md           = strtoull([off_file[@"CSFindMD"]             UTF8String], NULL, 16);
+        
+        INFO("grabbed all offsets! eg: %llx, %llx, slide: %llx", offset_kernel_task, offset_sha1_final, kernel_slide);
+        
+        init_kexecute();
     }
-    INFO("got tfp0: %x", tfp0);
-    
-    NSDictionary *off_file = [NSDictionary dictionaryWithContentsOfFile:@"/meridian/offsets.plist"];
-    if (off_file == NULL) {
-        ERROR("failed to find the offsets file!");
-        return;
-    }
-    
-    kernel_base                 = strtoull([off_file[@"KernelBase"]           UTF8String], NULL, 16);
-    kernel_slide                = strtoull([off_file[@"KernelSlide"]          UTF8String], NULL, 16);
-    offset_zonemap              = strtoull([off_file[@"ZoneMap"]              UTF8String], NULL, 16) + kernel_slide;
-    offset_kernel_task          = strtoull([off_file[@"KernelTask"]           UTF8String], NULL, 16) + kernel_slide;
-    offset_vfs_context_current  = strtoull([off_file[@"VfsContextCurrent"]    UTF8String], NULL, 16) + kernel_slide;
-    offset_vnode_getfromfd      = strtoull([off_file[@"VnodeGetFromFD"]       UTF8String], NULL, 16) + kernel_slide;
-    offset_vnode_getattr        = strtoull([off_file[@"VnodeGetAttr"]         UTF8String], NULL, 16) + kernel_slide;
-    offset_vnode_put            = strtoull([off_file[@"VnodePut"]             UTF8String], NULL, 16) + kernel_slide;
-    offset_csblob_ent_dict_set  = strtoull([off_file[@"CSBlobEntDictSet"]     UTF8String], NULL, 16) + kernel_slide;
-    offset_sha1_init            = strtoull([off_file[@"SHA1Init"]             UTF8String], NULL, 16) + kernel_slide;
-    offset_sha1_update          = strtoull([off_file[@"SHA1Update"]           UTF8String], NULL, 16) + kernel_slide;
-    offset_sha1_final           = strtoull([off_file[@"SHA1Final"]            UTF8String], NULL, 16) + kernel_slide;
-    offset_add_x0_x0_0x40_ret   = strtoull([off_file[@"AddGadgetRet"]         UTF8String], NULL, 16);
-    offset_osboolean_true       = strtoull([off_file[@"OSBooleanTrue"]        UTF8String], NULL, 16);
-    offset_osboolean_false      = strtoull([off_file[@"OSBooleanFalse"]       UTF8String], NULL, 16);
-    offset_osunserialize_xml    = strtoull([off_file[@"OSUnserializeXML"]     UTF8String], NULL, 16);
-    offset_cs_find_md           = strtoull([off_file[@"CSFindMD"]             UTF8String], NULL, 16);
-    
-    INFO("grabbed all offsets! eg: %llx, %llx, slide: %llx", offset_kernel_task, offset_sha1_final, kernel_slide);
-    
-    init_kexecute();
     
     // This is some wicked crazy shit that needs to happen to correctly patch
     // after amfid has been killed & launched & patched again... it's nuts.

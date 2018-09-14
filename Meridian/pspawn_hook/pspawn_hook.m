@@ -52,25 +52,27 @@ int current_process = PROCESS_OTHER;
 
 kern_return_t bootstrap_look_up(mach_port_t port, const char *service, mach_port_t *server_port);
 
-mach_port_t jbd_port;
+mach_port_t jbd_port = MACH_PORT_NULL;
 
 #define DYLD_INSERT             "DYLD_INSERT_LIBRARIES="
 #define MAX_INJECT              1
 
-#define PSPAWN_HOOK_DYLIB       "/usr/lib/pspawn_hook.dylib"
-#define TWEAKLOADER_DYLIB       "/usr/lib/TweakLoader.dylib"
-#define LIBJAILBREAK_DYLIB      "/usr/lib/libjailbreak.dylib"
-#define AMFID_PAYLOAD_DYLIB     "/meridian/amfid_payload.dylib"
+#define PSPAWN_HOOK_DYLIB       (const char *)("/usr/lib/pspawn_hook.dylib")
+#define TWEAKLOADER_DYLIB       (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/usr/lib/tweakloader.dylib" : "/usr/lib/TweakLoader.dylib")
+#define LIBJAILBREAK_DYLIB      (const char *)("/usr/lib/libjailbreak.dylib")
+#define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/jb/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
 
 const char *xpcproxy_blacklist[] = {
     "com.apple.diagnosticd",    // syslog
     "MTLCompilerService",
+    "mapspushd",                // stupid Apple Maps
     "com.apple.notifyd",        // fuck this daemon and everything it stands for
     "OTAPKIAssetTool",
     "FileProvider",             // seems to crash from oosb r/w etc
     "jailbreakd",               // gotta call to this
     "dropbear",
     "cfprefsd",
+    "debugserver",
     NULL
 };
 
@@ -360,7 +362,7 @@ static void ctor(void) {
     // this will have <binary> call to jbd in order to platformize
     if (current_process == PROCESS_OTHER) {
         if (access(LIBJAILBREAK_DYLIB, F_OK) != 0) {
-            printf("[!] " LIBJAILBREAK_DYLIB " was not found!\n");
+            printf("[!] %s was not found!\n", LIBJAILBREAK_DYLIB);
             return;
         }
         
