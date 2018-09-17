@@ -115,8 +115,8 @@ void fixupsetuid(int pid) {
     wk32(proc + offsetof_p_uid, fileUid);
     wk32(proc + offsetof_p_ruid, fileUid);
     // leaving the gid stuff incase i need to change that too
-    // wk32(proc + offsetof_p_gid, fileUid);
-    // wk32(proc + offsetof_p_rgid, fileUid);
+    wk32(proc + offsetof_p_gid, fileUid);
+    wk32(proc + offsetof_p_rgid, fileUid);
     
     uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
