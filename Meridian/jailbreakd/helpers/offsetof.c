@@ -5,6 +5,8 @@
 #define offsetof_p_gid (unsigned)(0x34)    // proc_t::p_uid
 #define offsetof_p_ruid (unsigned)(0x38)    // proc_t::p_uid
 #define offsetof_p_rgid (unsigned)(0x3c)    // proc_t::p_uid
+#define offsetof_p_svuid (unsigned)(0x40)    // proc_t::p_uid
+#define offsetof_p_svgid (unsigned)(0x44)    // proc_t::p_uid
 #define offsetof_p_ucred (unsigned)(0x100)    // proc_t::p_ucred
 #define offsetof_p_csflags (unsigned)(0x2a8)    // proc_t::p_csflags
 #define offsetof_itk_self (unsigned)(0xD8)    // task_t::itk_self (convert_task_to_port)

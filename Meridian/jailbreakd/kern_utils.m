@@ -94,9 +94,9 @@ void fixupsetuid(int pid) {
         return;
     }
     
-    if (!(file_st.st_mode & S_ISUID)) {
-        fprintf(stderr, "File is not setuid: %s \n", pathbuf);
-        NSLog(@"Not granting setuid - file is not setuid: %s", pathbuf);
+    if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
+        fprintf(stderr, "File is not setuid or setgid: %s \n", pathbuf);
+        NSLog(@"Not granting setuid - file is not setuid or setgid: %s", pathbuf);
         return;
     }
     
@@ -109,19 +109,22 @@ void fixupsetuid(int pid) {
     fprintf(stderr, "Found proc %llx for pid %d \n", proc, pid);
     
     uid_t fileUid = file_st.st_uid;
+    uid_t fileGid = file_st.st_gid;
     
     NSLog(@"Applying UID %d to process %d", fileUid, pid);
-    
-    wk32(proc + offsetof_p_uid, fileUid);
-    wk32(proc + offsetof_p_ruid, fileUid);
-    // leaving the gid stuff incase i need to change that too
-    wk32(proc + offsetof_p_gid, fileUid);
-    wk32(proc + offsetof_p_rgid, fileUid);
-    
     uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
-    wk32(ucred + offsetof_ucred_cr_uid, fileUid);
-    wk32(ucred + offsetof_ucred_cr_svuid, fileUid);
+		if (file_st.st_mode & S_ISUID) {
+        wk32(proc + offsetof_p_svuid, fileUid);
+        wk32(ucred + offsetof_ucred_cr_svuid, fileUid);
+        wk32(ucred + offsetof_ucred_cr_uid, fileUid);
+		}
+
+		if (file_st.st_mode & S_ISGID) {
+        wk32(proc + offsetof_p_svgid, fileGid);
+        wk32(ucred + offsetof_ucred_cr_svgid, fileGid);
+        wk32(ucred + offsetof_ucred_cr_groups, fileGid);
+		}
 }
 
 void set_csflags(uint64_t proc) {
