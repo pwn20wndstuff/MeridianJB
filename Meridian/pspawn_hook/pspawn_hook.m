@@ -64,6 +64,8 @@ dispatch_queue_t queue = NULL;
 #define LIBJAILBREAK_DYLIB      (const char *)("/usr/lib/libjailbreak.dylib")
 #define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/jb/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
 
+bool get_jbd_port();
+
 const char *xpcproxy_blacklist[] = {
     "com.apple.diagnosticd",    // syslog
     "MTLCompilerService",
@@ -267,6 +269,9 @@ int fake_posix_spawn_common(pid_t *pid,
     
     dispatch_async(queue, ^{
         kern_return_t ret = jbd_call(jbd_port, JAILBREAKD_COMMAND_ENTITLE_AND_SIGCONT, child);
+        if (current_process == PROCESS_LAUNCHD && ret == MACH_SEND_INVALID_DEST && get_jbd_port())
+            ret = jbd_call(jbd_port, JAILBREAKD_COMMAND_ENTITLE_AND_SIGCONT, child);
+
         if (ret != KERN_SUCCESS) {
             DEBUGLOG("jbd_call(launchd, %d): %x (%s)", child, ret, mach_error_string(ret));
         }
@@ -309,6 +314,21 @@ void rebind_pspawns(void) {
     rebind_symbols(rebindings, 2);
 }
 
+bool get_jbd_port() {
+        if (host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 15, &jbd_port)) {
+            DEBUGLOG("can't get hsp15 :(");
+            return false;
+        }
+
+        if (!MACH_PORT_VALID(jbd_port)) {
+            DEBUGLOG("failed to get jbd port!! ret: %x", jbd_port);
+            return false;
+        }
+
+        DEBUGLOG("got jbd port: %x", jbd_port);
+        return true;
+}
+
 __attribute__ ((constructor))
 static void ctor(void) {
     queue = dispatch_queue_create("pspawn.queue", NULL);
@@ -330,19 +350,8 @@ static void ctor(void) {
     DEBUGLOG("my path: %s", pathbuf);
     
     if (current_process == PROCESS_LAUNCHD) {
-        if (host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 15, &jbd_port)) {
-            DEBUGLOG("can't get hsp15 :(");
-            return;
-        }
-
-        if (!MACH_PORT_VALID(jbd_port)) {
-            DEBUGLOG("failed to get jbd port!! ret: %x", jbd_port);
-            return;
-        }
-        
-        DEBUGLOG("got jbd port: %x", jbd_port);
-        
-        rebind_pspawns();
+        if (get_jbd_port())
+            rebind_pspawns();
         return;
     }
     
