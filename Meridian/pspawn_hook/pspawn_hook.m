@@ -31,7 +31,7 @@ do {                                                                \
     fprintf(log_file, "[%.*s] ", (int)strlen(time) - 1, time);      \
     fprintf(log_file, fmt "\n", ##args);                            \
     fflush(log_file);                                               \
-} while(0);
+} while(0)
 
 #define PROC_PIDPATHINFO_MAXSIZE  (4 * MAXPATHLEN)
 int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
@@ -68,6 +68,7 @@ bool get_jbd_port();
 
 const char *xpcproxy_blacklist[] = {
     "com.apple.diagnosticd",    // syslog
+    "com.apple.logd",   	// logd - things that log when this is starting end badly so...
     "MTLCompilerService",
     "mapspushd",                // stupid Apple Maps
     "com.apple.notifyd",        // fuck this daemon and everything it stands for

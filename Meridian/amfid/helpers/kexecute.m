@@ -4,6 +4,7 @@
 #include "kexecute.h"
 #include "kern_utils.h"
 #include "offsetof.h"
+#include "../common.h"
 
 mach_port_t prepare_user_client(void) {
     kern_return_t err;
@@ -38,7 +39,7 @@ void init_kexecute(void) {
     // From v0rtex - get the IOSurfaceRootUserClient port, and then the address of the actual client, and vtable
     IOSurfaceRootUserClient_port = find_port(user_client); // UserClients are just mach_ports, so we find its address
     if (IOSurfaceRootUserClient_port <= 0) {
-        NSLog(@"error calling find_port whilst initializing kexecute!");
+        LOG(@"error calling find_port whilst initializing kexecute!");
         return;
     }
     

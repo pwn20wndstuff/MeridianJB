@@ -51,7 +51,7 @@ CACHED_FIND(uint64_t, our_task_addr) {
     uint64_t our_proc = proc_find(getpid(), 3);
 
     if (our_proc == 0) {
-        NSLog(@"failed to find our_task_addr!");
+        LOG(@"failed to find our_task_addr!");
         return -1;
     }
 

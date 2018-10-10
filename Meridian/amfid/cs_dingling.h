@@ -1,9 +1,6 @@
 #include <stdlib.h>
+#include "common.h"
 #include "cs_blobs.h"
-
-#define LOG(str, args...) do { NSLog(@"[amfid_payload] " str, ##args); } while(0)
-#define ERROR(str, args...) LOG("ERROR: [%s] " str, __func__, ##args)
-#define INFO(str, args...)  LOG("INFO: " str, ##args)
 
 typedef struct {
     const char *name;

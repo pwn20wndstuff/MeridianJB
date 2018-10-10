@@ -93,7 +93,6 @@ void fixupsetuid(int pid) {
     
     if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
         fprintf(stderr, "File is not setuid or setgid: %s \n", pathbuf);
-        NSLog(@"Not granting setuid - file is not setuid or setgid: %s", pathbuf);
         return;
     }
     
@@ -108,7 +107,7 @@ void fixupsetuid(int pid) {
     uid_t fileUid = file_st.st_uid;
     uid_t fileGid = file_st.st_gid;
     
-    NSLog(@"Applying UID %d to process %d", fileUid, pid);
+    fprintf(stderr, "Applying UID %d to process %d", fileUid, pid);
     uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
 		if (file_st.st_mode & S_ISUID) {

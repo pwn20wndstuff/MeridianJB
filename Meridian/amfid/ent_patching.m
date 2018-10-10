@@ -52,7 +52,7 @@ int vnode_put(uint64_t vnode) {
 
 int calculate_added_offset(uint64_t vnode) {
     int32_t possibly_iocount = rk32(vnode + offsetof(struct vnode, v_iocount));
-    NSLog(@"possibly_iocount value: %d", possibly_iocount);
+    LOG(@"possibly_iocount value: %d", possibly_iocount);
     
     // Since we've just called vnode_getfromfd, the iocount of this vnode cannot
     // be 0. It also cannot be a negative number, as this would be an invalid
@@ -71,7 +71,7 @@ int check_vtype(uint64_t vnode) {
     uint16_t v_type = rk16(vnode + offsetof(struct vnode, v_type) + added_offset);
     
     if (v_type != VREG) {
-        NSLog(@"got weird vtype for vnode (0x%llx): %d", vnode, v_type);
+        LOG(@"got weird vtype for vnode (0x%llx): %d", vnode, v_type);
         return 1;
     }
     
@@ -120,13 +120,13 @@ void csblob_update_csflags(uint64_t cs_blobs, uint32_t flags_to_add) {
 int set_memory_object_code_signed(uint64_t vu_ubcinfo) {
     uint64_t ui_control = rk64(vu_ubcinfo + offsetof(struct ubc_info, ui_control));
     if (ui_control == 0) {
-        NSLog(@"failed to get ui_control");
+        LOG(@"failed to get ui_control");
         return 1;
     }
     
     uint64_t moc_object = rk64(ui_control + 0x8); // offsetof(struct memory_object_control, moc_object)
     if (moc_object == 0) {
-        NSLog(@"failed to get moc_object");
+        LOG(@"failed to get moc_object");
         return 1;
     }
     
@@ -156,14 +156,14 @@ uint64_t find_csb_hashtype(uint32_t hashType) {
         if (cs_hash_ptr != 0) {
             kwrite(cs_hash_ptr, &hash, sizeof(hash));
         } else {
-            NSLog(@"failed to kalloc %lu bytes! (find_csb_hashtype)", sizeof(hash));
+            LOG(@"failed to kalloc %lu bytes! (find_csb_hashtype)", sizeof(hash));
         }
     }
     
     if (offset_cs_find_md == 0) {
         // Dammit :( If the hash isn't SHA1 it now won't run,
         // but if we return 0 it will just KP. I'd rather a Killed: 9
-        NSLog(@"FATAL ERROR! Unable to find 'cs_find_md'!!");
+        LOG(@"FATAL ERROR! Unable to find 'cs_find_md'!!");
         return cs_hash_ptr;
     }
     
@@ -177,7 +177,7 @@ uint64_t construct_cs_blob(const void *cs,
                        uint64_t macho_offset) {
     uint64_t entire_csdir = kalloc(cs_length);
     if (entire_csdir == 0) {
-        NSLog(@"error!! failed to kalloc %d bytes!! (construct_cs_blob)", cs_length);
+        LOG(@"error!! failed to kalloc %d bytes!! (construct_cs_blob)", cs_length);
         return 0;
     }
     kwrite(entire_csdir, cs, cs_length);
@@ -208,7 +208,7 @@ uint64_t construct_cs_blob(const void *cs,
     
     uint64_t csb_hashtype = find_csb_hashtype(blob->hashType);
     if (csb_hashtype == 0) {
-        NSLog(@"failed to get csb_hashtype!! (construct_cs_blob)");
+        LOG(@"failed to get csb_hashtype!! (construct_cs_blob)");
         return 0;
     }
     cs_blob->csb_hashtype = (const struct cs_hash *)csb_hashtype;
@@ -233,7 +233,7 @@ uint64_t construct_cs_blob(const void *cs,
         uint64_t teamid_addr = kalloc(length);
         
         if (teamid_addr == 0) {
-            NSLog(@"failed to kalloc %d bytes!! (construct_cs_blob)", length);
+            LOG(@"failed to kalloc %d bytes!! (construct_cs_blob)", length);
             return 0;
         }
         
@@ -263,7 +263,7 @@ uint64_t get_fresh_entitlements_blob() {
         // Copy the data into kernel
         uint64_t fresh_entitlements_blob = kalloc(size);
         if (fresh_entitlements_blob == 0) {
-            NSLog(@"failed to allocate %d bytes!! in ent_patching", size);
+            LOG(@"failed to allocate %d bytes!! in ent_patching", size);
             return -1;
         }
         
@@ -301,7 +301,7 @@ int fixup_platform_application(const char *path,
     
     if (added_offset == -1) {
         added_offset = calculate_added_offset(vnode);
-        NSLog(@"added_offset was set to: %d", added_offset);
+        LOG(@"added_offset was set to: %d", added_offset);
     }
     
     ret = check_vtype(vnode);
@@ -324,7 +324,7 @@ int fixup_platform_application(const char *path,
                                      csdir_offset,
                                      macho_offset);
         if (cs_blobs == 0) {
-            NSLog(@"failed to construct csblob");
+            LOG(@"failed to construct csblob");
             return -7;
         }
         
@@ -336,7 +336,7 @@ int fixup_platform_application(const char *path,
         // this is all we're here to do, really :-)
         uint64_t dict = OSUnserializeXML(default_ents);
         if (dict == 0) {
-            NSLog(@"failed to call OSUnserializeXML in ent_patching!!");
+            LOG(@"failed to call OSUnserializeXML in ent_patching!!");
             return -8;
         }
         
@@ -374,7 +374,7 @@ int fixup_platform_application(const char *path,
         int size = ntohl(entitlements->length);
         uint64_t entptr = kalloc(size);
         if (entptr == 0) {
-            NSLog(@"failed to allocate %d bytes!! in ent_patching", size);
+            LOG(@"failed to allocate %d bytes!! in ent_patching", size);
             return -9;
         }
         
@@ -396,7 +396,7 @@ int fixup_platform_application(const char *path,
         // something to do with a mutex lock.. i don't care to figure out what
         // set generation count
 //        wk64(vu_ubcinfo + offsetof(struct ubc_info, cs_add_gen), 1);
-//        NSLog(@"cs_add_gen: %llx", rk64(vu_ubcinfo + offsetof(struct ubc_info, cs_add_gen)));
+//        LOG(@"cs_add_gen: %llx", rk64(vu_ubcinfo + offsetof(struct ubc_info, cs_add_gen)));
         
         // Update the cs_mtime field in ubc_info struct
         uint64_t vnode_attr = kalloc(sizeof(struct vnode_attr));
@@ -405,7 +405,7 @@ int fixup_platform_application(const char *path,
         // int vnode_getattr(vnode_t vp, struct vnode_attr *vap, vfs_context_t ctx)
         ret = kexecute(offset_vnode_getattr, vnode, vnode_attr, vfs_context, 0, 0, 0, 0);
         if (ret != 0) {
-            NSLog(@"vnode_attr failed - ret value: %d", ret);
+            LOG(@"vnode_attr failed - ret value: %d", ret);
         } else {
             uint64_t mtime = rk64(vnode_attr + offsetof(struct vnode_attr, va_modify_time));
             if (mtime != 0) {
@@ -416,7 +416,7 @@ int fixup_platform_application(const char *path,
     
 //    ret = vnode_put(vnode);
 //    if (ret != 0) {
-//        NSLog(@"failed vnode_put(%llx)! ret: %d", vnode, ret);
+//        LOG(@"failed vnode_put(%llx)! ret: %d", vnode, ret);
 //        return -11;
 //    }
     

@@ -99,12 +99,12 @@ uint64_t zm_fix_addr(uint64_t addr) {
         size_t r = kread(zone_map + 0x10, &zm_hdr, sizeof(zm_hdr));
         
         if (r != sizeof(zm_hdr) || zm_hdr.start == 0 || zm_hdr.end == 0) {
-            NSLog(@"kread of zone_map failed!");
+            fprintf(stderr, "kread of zone_map failed!");
             return 0;
         }
 
         if (zm_hdr.end - zm_hdr.start > 0x100000000) {
-            NSLog(@"zone_map is too big, sorry.\n");
+            fprintf(stderr, "zone_map is too big, sorry.\n");
             return 0;
         }
     }

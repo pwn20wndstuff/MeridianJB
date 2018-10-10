@@ -24,6 +24,7 @@
 #include "kexecute.h"
 #include "kmem.h"
 #include "ent_patching.h"
+#include "common.h"
 
 int (*old_MISValidateSignatureAndCopyInfo)(NSString* file, NSDictionary* options, NSMutableDictionary** info);
 int (*old_MISValidateSignatureAndCopyInfo_broken)(NSString* file, NSDictionary* options, NSMutableDictionary** info);
