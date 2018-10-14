@@ -2,6 +2,7 @@
 
 #include <sched.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #include "common.h"
 #include "kern_utils.h"
@@ -25,19 +26,32 @@ uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
 
 // Please call `proc_release` after you are finished with your proc!
+
+pthread_mutex_t proc_lock;
+static int init_lock = 0;
+
 uint64_t proc_find(int pd) {
     uint64_t proc = kernprocaddr;
     
+    if (!init_lock) {
+        pthread_mutex_init(&proc_lock, NULL);
+	init_lock = 1;
+    }
+
+    pthread_mutex_lock(&proc_lock);
+
     while (proc) {
         uint32_t found_pid = rk32(proc + 0x10);
         
         if (found_pid == pd) {
+	    pthread_mutex_unlock(&proc_lock);
             return proc;
         }
         
         proc = rk64(proc + 0x8);
     }
     
+    pthread_mutex_unlock(&proc_lock);
     return 0;
 }
 
