@@ -99,7 +99,9 @@ int handle_command(uint8_t command, uint32_t pid) {
 
 kern_return_t jbd_call(mach_port_t server_port, uint8_t command, uint32_t pid) {
     DEBUGLOG(false, "jbd_call: %x, %x, %d", server_port, command, pid);
-    return (handle_command(command, pid) == 0) ? KERN_SUCCESS : KERN_FAILURE;
+    kern_return_t ret = (handle_command(command, pid) == 0) ? KERN_SUCCESS : KERN_FAILURE;
+    DEBUGLOG(false, "jbd_call complete: %d", ret);
+    return ret;
 }
 
 int main(int argc, char **argv, char **envp) {
@@ -136,7 +138,13 @@ int main(int argc, char **argv, char **envp) {
     
     // Set up mach stuff
     mach_port_t server_port;
+    mach_port_t server_port_2;
     if ((err = bootstrap_check_in(bootstrap_port, "zone.sparkes.jailbreakd", &server_port))) {
+        DEBUGLOG(true, "Failed to check in: %s", mach_error_string(err));
+        return -1;
+    }
+    
+    if ((err = bootstrap_check_in(bootstrap_port, "cy:jailbreakd", &server_port_2))) {
         DEBUGLOG(true, "Failed to check in: %s", mach_error_string(err));
         return -1;
     }
@@ -146,6 +154,12 @@ int main(int argc, char **argv, char **envp) {
         dispatch_mig_server(server, jbd_jailbreak_daemon_subsystem.maxsize, jailbreak_daemon_server);
     });
     dispatch_resume(server);
+    
+    dispatch_source_t server2 = dispatch_source_create(DISPATCH_SOURCE_TYPE_MACH_RECV, server_port_2, 0, dispatch_get_main_queue());
+    dispatch_source_set_event_handler(server2, ^{
+        dispatch_mig_server(server2, jbd_jailbreak_daemon_subsystem.maxsize, jailbreak_daemon_server);
+    });
+    dispatch_resume(server2);
     
     // Now ready for connections!
     DEBUGLOG(true, "mach server now running!");

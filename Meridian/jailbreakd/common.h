@@ -1,6 +1,9 @@
+#include <sys/time.h>
 
+struct timeval dl_tv;
 #define DEBUGLOG(syslog, fmt, args ...)     \
-    fprintf(stdout, fmt "\n", ##args);      \
+    gettimeofday(&dl_tv, NULL); \
+    fprintf(stdout, "%ld.%d: " fmt "\n", dl_tv.tv_sec, dl_tv.tv_usec, ##args);      \
     fflush(stdout);
 
 #define CACHED_FIND(type, name) \
