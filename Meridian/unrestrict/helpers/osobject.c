@@ -4,6 +4,7 @@
 #include "kexecute.h"
 #include "kmem.h"
 #include "osobject.h"
+#include "common.h"
 
 // offsets in vtable:
 static uint32_t off_OSDictionary_SetObjectWithCharP = sizeof(void*) * 0x1F;

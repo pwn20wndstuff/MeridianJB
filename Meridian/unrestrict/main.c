@@ -12,7 +12,6 @@
 #include "helpers/kmem.h"
 
 #define PROC_PIDPATHINFO_MAXSIZE (4 * MAXPATHLEN)
-int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
 
 __attribute__((constructor))
 void ctor() {
@@ -56,21 +55,21 @@ void ctor() {
     kernel_slide            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("kern base: %llx, slide: %llx", kernel_base, kernel_slide);
 
-    kernprocaddr            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProcAddr")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("kernprocaddr: %llx\n", kernprocaddr);
+    uint64_t kernproc            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProc")), kCFStringEncodingUTF8), NULL, 16);
+    DEBUGLOG("kernproc: %llx", kernproc);
     offset_zonemap          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_zonemap: %llx\n", offset_zonemap);
+    DEBUGLOG("offset_zonemap: %llx", offset_zonemap);
 
     offset_add_ret_gadget   = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("AddRetGadget")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_add_ret_gadget: %llx\n", offset_add_ret_gadget);
+    DEBUGLOG("offset_add_ret_gadget: %llx", offset_add_ret_gadget);
     offset_osboolean_true   = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanTrue")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_osboolean_true: %llx\n", offset_osboolean_true);
+    DEBUGLOG("offset_osboolean_true: %llx", offset_osboolean_true);
     offset_osboolean_false  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanFalse")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_osboolean_false: %llx\n", offset_osboolean_false);
+    DEBUGLOG("offset_osboolean_false: %llx", offset_osboolean_false);
     offset_osunserializexml = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSUnserializeXML")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_osunserializexml: %llx\n", offset_osunserializexml);
+    DEBUGLOG("offset_osunserializexml: %llx", offset_osunserializexml);
     offset_smalloc          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Smalloc")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("offset_smalloc: %llx\n", offset_smalloc);
+    DEBUGLOG("offset_smalloc: %llx", offset_smalloc);
     CFRelease(offsets);
 
     // tfp0, patchfinder, kexecute
@@ -81,6 +80,9 @@ void ctor() {
 	    return;
     }
     DEBUGLOG("tfp0: %x", tfp0);
+
+    kernprocaddr = rk64(kernproc);
+    DEBUGLOG("kernprocaddr: %llx", kernprocaddr);
 
     init_kexecute();
 }

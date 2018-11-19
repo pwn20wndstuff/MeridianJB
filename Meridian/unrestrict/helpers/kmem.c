@@ -1,5 +1,6 @@
 #include "kern_utils.h"
 #include "kmem.h"
+#include "common.h"
 
 #define MAX_CHUNK_SIZE 0xFFF
 
@@ -13,7 +14,7 @@ size_t kread(uint64_t where, void *p, size_t size) {
 		}
 		rv = mach_vm_read_overwrite(tfp0, where + offset, chunk, (mach_vm_address_t)p + offset, &sz);
 		if (rv || sz == 0) {
-			fprintf(stderr, "[e] error reading kernel @%p\n", (void *)(offset + where));
+			DEBUGLOG("[e] error reading kernel @%p", (void *)(offset + where));
 			break;
 		}
 		offset += sz;
@@ -31,7 +32,7 @@ size_t kwrite(uint64_t where, const void *p, size_t size) {
 		}
 		rv = mach_vm_write(tfp0, where + offset, (mach_vm_offset_t)p + offset, chunk);
 		if (rv) {
-			fprintf(stderr, "[e] error writing kernel @%p\n", (void *)(offset + where));
+			DEBUGLOG("[e] error writing kernel @%p", (void *)(offset + where));
 			break;
 		}
 		offset += chunk;
@@ -91,18 +92,19 @@ uint64_t zm_fix_addr(uint64_t addr) {
     static kmap_hdr_t zm_hdr = {0, 0, 0, 0};
   
     if (zm_hdr.start == 0) {
-        uint64_t zone_map = rk64(offset_zonemap + kernel_slide);
+        uint64_t zone_map = rk64(offset_zonemap);
+        DEBUGLOG("Calculating zm_hdr (offset_zonemap = 0x%llx zone_map = 0x%llx)", offset_zonemap, zone_map);
         
         // hdr is at offset 0x10, mutexes at start
         size_t r = kread(zone_map + 0x10, &zm_hdr, sizeof(zm_hdr));
         
         if (r != sizeof(zm_hdr) || zm_hdr.start == 0 || zm_hdr.end == 0) {
-            fprintf(stderr, "kread of zone_map failed!");
+            DEBUGLOG("kread of zone_map failed!");
             return 0;
         }
 
         if (zm_hdr.end - zm_hdr.start > 0x100000000) {
-            fprintf(stderr, "zone_map is too big, sorry.\n");
+            DEBUGLOG("zone_map is too big, sorry.");
             return 0;
         }
     }

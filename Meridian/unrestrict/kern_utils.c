@@ -56,7 +56,7 @@ CACHED_FIND(uint64_t, our_task_addr) {
     }
     
     if (proc == 0) {
-        fprintf(stdout, "failed to find our_task_addr!\n");
+        DEBUGLOG("failed to find our_task_addr!");
         exit(EXIT_FAILURE);
     }
 
@@ -82,46 +82,46 @@ void fixupsetuid(int pid) {
     
     int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
     if (ret < 0) {
-        fprintf(stderr, "Unable to get path for PID %d \n", pid);
+        DEBUGLOG("Unable to get path for PID %d", pid);
         return;
     }
     
     struct stat file_st;
     if (lstat(pathbuf, &file_st) == -1) {
-        fprintf(stderr, "Unable to get stat for file %s \n", pathbuf);
+        DEBUGLOG("Unable to get stat for file %s", pathbuf);
         return;
     }
     
     if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
-        fprintf(stderr, "File is not setuid or setgid: %s \n", pathbuf);
+        DEBUGLOG("File is not setuid or setgid: %s", pathbuf);
         return;
     }
     
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        fprintf(stderr, "Unable to find proc for pid %d \n", pid);
+        DEBUGLOG("Unable to find proc for pid %d", pid);
         return;
     }
     
-    fprintf(stderr, "Found proc %llx for pid %d \n", proc, pid);
+    DEBUGLOG("Found proc %llx for pid %d", proc, pid);
     
     uid_t fileUid = file_st.st_uid;
     uid_t fileGid = file_st.st_gid;
     
-    fprintf(stderr, "Applying UID %d to process %d", fileUid, pid);
+    DEBUGLOG("Applying UID %d to process %d", fileUid, pid);
     uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
-		if (file_st.st_mode & S_ISUID) {
+    if (file_st.st_mode & S_ISUID) {
         wk32(proc + offsetof_p_svuid, fileUid);
         wk32(ucred + offsetof_ucred_cr_svuid, fileUid);
         wk32(ucred + offsetof_ucred_cr_uid, fileUid);
-		}
+    }
 
-		if (file_st.st_mode & S_ISGID) {
+    if (file_st.st_mode & S_ISGID) {
         wk32(proc + offsetof_p_svgid, fileGid);
         wk32(ucred + offsetof_ucred_cr_svgid, fileGid);
         wk32(ucred + offsetof_ucred_cr_groups, fileGid);
-		}
+    }
 }
 
 void set_csflags(uint64_t proc) {
@@ -186,10 +186,8 @@ uint64_t get_exception_osarray(void) {
 static const char *exc_key = "com.apple.security.exception.files.absolute-path.read-only";
 
 void set_sandbox_extensions(uint64_t proc) {
-    DEBUGLOG("set_sandbox_extensions called for %llx", proc);
     uint64_t proc_ucred = rk64(proc + 0x100);
     uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
-    DEBUGLOG("sandbox: %llx", sandbox);
     
     if (sandbox == 0) {
         DEBUGLOG("no sandbox, skipping (proc: %llx)", proc);
@@ -235,6 +233,7 @@ void set_amfi_entitlements(uint64_t proc) {
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
+        DEBUGLOG("present=0; setting to %llx", get_exception_osarray());
         rv = OSDictionary_SetItem(amfi_entitlements, exc_key, get_exception_osarray());
     } else if (present != get_exception_osarray()) {
         unsigned int itemCount = OSArray_ItemCount(present);
@@ -266,7 +265,7 @@ void set_amfi_entitlements(uint64_t proc) {
     }
 
     if (rv != 1) {
-        DEBUGLOG("Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx\n", amfi_entitlements, present);
+        DEBUGLOG("Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx", amfi_entitlements, present);
     }
 }
 

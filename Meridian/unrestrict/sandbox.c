@@ -2,6 +2,7 @@
 #include "kern_utils.h"
 #include "sandbox.h"
 #include "helpers/kexecute.h"
+#include "common.h"
 
 typedef uint64_t extension_hdr_t;
 typedef uint64_t extension_t;
@@ -58,7 +59,7 @@ uint64_t extension_create_file(const char* path, uint64_t nextptr) {
     size_t slen = strlen(path);
     
     if (path[slen - 1] == '/') {
-        fprintf(stderr, "No traling slash in path pls \n");
+        DEBUGLOG("No traling slash in path pls");
         return 0;
     }
     
@@ -186,12 +187,12 @@ void extension_add(uint64_t ext, uint64_t sb, const char* desc) {
         uint64_t ext_lst = rk64(ext_lst_p);
         
         while (ext_lst != 0) {
-            fprintf(stderr, "ext_lst_p = 0x%llx ext_lst = 0x%llx\n", ext_lst_p, ext_lst);
+            DEBUGLOG("ext_lst_p = 0x%llx ext_lst = 0x%llx", ext_lst_p, ext_lst);
             ext_lst_p = ext_lst + offsetof(struct extension, next);
             ext_lst = rk64(ext_lst_p);
         }
         
-        fprintf(stderr, "ext_lst_p = 0x%llx ext_lst = 0x%llx\n", ext_lst_p, ext_lst);
+        DEBUGLOG("ext_lst_p = 0x%llx ext_lst = 0x%llx", ext_lst_p, ext_lst);
         
         wk64(ext_lst_p, ext);
     }

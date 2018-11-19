@@ -4,7 +4,7 @@ SRC     = $(wildcard *.c helpers/*.c)
 
 CC      = xcrun -sdk iphoneos gcc -arch arm64 -arch armv7 -arch armv7s
 LDID    = ldid
-CFLAGS  = -dynamiclib -I. -I./helpers -framework IOKit -framework CoreFoundation
+CFLAGS  = -dynamiclib -I. -I./helpers -framework IOKit -framework CoreFoundation -Wno-deprecated-declarations
 
 all: $(OUTDIR)/$(TARGET)
 
