@@ -46,6 +46,9 @@ mach_port_t jbd_port = MACH_PORT_NULL;
 
 __attribute__ ((constructor))
 static void ctor(int argc, char **argv) {
+    if (access("/etc/rc.d/substrate") == -1) {
+        return;
+    }
 	bool do_sandbox = false;
 	bool do_setuid = false;
 	char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
