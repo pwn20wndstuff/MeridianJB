@@ -62,7 +62,7 @@ dispatch_queue_t queue = NULL;
 #define PSPAWN_HOOK_DYLIB       (const char *)("/usr/lib/pspawn_hook.dylib")
 #define TWEAKLOADER_DYLIB       (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/usr/lib/tweakloader.dylib" : "/usr/lib/TweakLoader.dylib")
 #define LIBJAILBREAK_DYLIB      (const char *)("/usr/lib/libjailbreak.dylib")
-#define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/jb/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
+#define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/Library/MobileSubstrate/DynamicLibraries/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
 
 bool get_jbd_port();
 
@@ -141,7 +141,7 @@ int fake_posix_spawn_common(pid_t *pid,
             }
             break;
         case PROCESS_XPCPROXY:
-            if (strcmp(path, "/usr/libexec/amfid") == 0) {
+            if (strcmp(path, "/usr/libexec/amfid") == 0 && access(AMFID_PAYLOAD_DYLIB, F_OK) == 0) {
                 inject[ninject++] = AMFID_PAYLOAD_DYLIB;
                 break;
             }

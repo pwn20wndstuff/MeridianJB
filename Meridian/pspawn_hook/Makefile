@@ -12,7 +12,7 @@ $(OUTDIR):
 	mkdir -p $(OUTDIR)
 
 $(OUTDIR)/$(TARGET): $(SRC) | $(OUTDIR)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -install_name /usr/lib/$(TARGET) -o $@ $^
 	$(LDID) -S $@
 
 install: all
