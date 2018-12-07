@@ -1,5 +1,6 @@
 TARGET  = jailbreakd
 OUTDIR ?= bin
+PREFIX ?= /meridian
 SRC     = $(wildcard *.c) $(wildcard *.m) $(wildcard */*.c) $(wildcard */*.m)
 
 CC      = xcrun -sdk iphoneos gcc -arch arm64
@@ -7,7 +8,13 @@ LDID    = ldid
 CHMOD   = chmod
 CFLAGS  = -I. -I./helpers -I./mach -framework Foundation -framework IOKit
 
+.PHONY: all install clean
+
 all: $(OUTDIR)/$(TARGET)
+
+install: all
+	install -d "$(DESTDIR)$(PREFIX)"
+	install $(OUTDIR)/$(TARGET) "$(DESTDIR)$(PREFIX)"
 
 $(OUTDIR):
 	mkdir -p $(OUTDIR)
