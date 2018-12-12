@@ -2,6 +2,8 @@
 
 #include <dlfcn.h>
 #include <spawn.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <mach/mach.h>
 
@@ -394,4 +396,11 @@ static void ctor(void) {
     }
     
     rebind_pspawns();
+    int stampfd = open("/var/run/pspawn_hook.ts", O_CREAT|O_WRONLY|O_TRUNC);
+    if (stampfd == -1)
+        return;
+
+    dprintf(stampfd, "%ld", time(NULL));
+    close(stampfd);
+    chmod("/var/run/pspawn_hook.ts", 0644);
 }
