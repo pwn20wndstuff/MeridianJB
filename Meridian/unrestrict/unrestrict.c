@@ -7,6 +7,10 @@
 #import "common.h"
 
 FILE *log_file = NULL;
+
+#define CS_OPS_STATUS		   0	   /* return status */
+int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
+
 #define PROC_PIDPATHINFO_MAXSIZE  (4 * MAXPATHLEN)
 
 #define JAILBREAKD_COMMAND_ENTITLE 1
@@ -17,10 +21,10 @@ FILE *log_file = NULL;
 #define FLAG_PLATFORMIZE (1 << 1)
 
 const char *blacklist[] = {
-    "diagnosticd",    // syslog
-    "logd",   	// logd - things that log when this is starting end badly so...
-    "jailbreakd",               // gotta call to this
-    NULL
+	"diagnosticd",	// syslog
+	"logd",   	// logd - things that log when this is starting end badly so...
+	"jailbreakd",			   // gotta call to this
+	NULL
 };
 
 bool is_blacklisted(const char *proc) {
@@ -50,13 +54,40 @@ bool MSunrestrict0(mach_port_t task) {
 	}
 
 	if (!is_blacklisted(pathbuf)) {
-		DEBUGLOG("%s: (%d) platformizing", pathbuf, ourpid);
-		platformize(ourpid);
-		DEBUGLOG("%s: (%d) fixing setuid", pathbuf, ourpid);
-		fixupsetuid(ourpid);
-		DEBUGLOG("%s: (%d) complete", pathbuf, ourpid);
+		DEBUGLOG("%s: (%d) fixing up", pathbuf, ourpid);
+		fixup(ourpid);
 	} else {
 		DEBUGLOG("%s: blacklisted", pathbuf);
 	}
+	return true;
+}
+
+bool MSrevalidate0(mach_port_t task) {
+	char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
+	bzero(pathbuf, sizeof(pathbuf));
+
+	pid_t ourpid;
+	if ( (pid_for_task(task, &ourpid) != 0) || ourpid <= 1) {
+		return true;
+	}
+	proc_pidpath(ourpid, pathbuf, sizeof(pathbuf));
+
+	if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
+		return true;
+	}
+
+	uint32_t status;
+	if (csops(ourpid, CS_OPS_STATUS, &status, sizeof(status)) < 0)
+	   return true;
+
+	uint64_t proc = proc_find(ourpid);
+	if (proc == 0) {
+		DEBUGLOG("failed to find proc for pid %d!", ourpid);
+		return true;
+	}
+
+	if ((status & CS_VALID) == 0)
+		fixup_cs_valid(proc);
+
 	return true;
 }

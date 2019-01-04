@@ -26,13 +26,13 @@ uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
 
 // Please call `proc_release` after you are finished with your proc!
-uint64_t proc_find(int pd) {
+uint64_t proc_find(int pid) {
     uint64_t proc = kernprocaddr;
     
     while (proc) {
         uint32_t found_pid = rk32(proc + 0x10);
         
-        if (found_pid == pd) {
+        if (found_pid == pid) {
             return proc;
         }
         
@@ -76,7 +76,7 @@ uint64_t find_port(mach_port_name_t port) {
     return rk64(is_table + (port_index * sizeof_ipc_entry_t));
 }
 
-void fixupsetuid(int pid) {
+void fixup_setuid(int pid, uint64_t proc) {
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
     
@@ -97,9 +97,8 @@ void fixupsetuid(int pid) {
         return;
     }
     
-    uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        DEBUGLOG("Unable to find proc for pid %d", pid);
+        DEBUGLOG("Invalid proc for pid %d", pid);
         return;
     }
     
@@ -124,16 +123,6 @@ void fixupsetuid(int pid) {
     }
 }
 
-void set_csflags(uint64_t proc) {
-    uint32_t pid = rk32(proc + 0x10);
-    
-    uint32_t csflags = rk32(proc + offsetof_p_csflags);
-
-    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW | CS_DEBUGGED) & ~(CS_RESTRICT | CS_HARD | CS_KILL);
-    
-    wk32(proc + offsetof_p_csflags, csflags);
-}
-
 void set_tfplatform(uint64_t proc) {
     // task.t_flags & TF_PLATFORM
     uint64_t task = rk64(proc + offsetof_task);
@@ -142,29 +131,9 @@ void set_tfplatform(uint64_t proc) {
     wk32(task+offsetof_t_flags, t_flags);
 }
 
-void set_csblob(uint64_t proc) {
-    uint64_t textvp = rk64(proc + offsetof_p_textvp); // vnode of executable
-    if (textvp == 0) return;
-    
-    uint16_t vnode_type = rk16(textvp + offsetof_v_type);
-    if (vnode_type != 1) return; // 1 = VREG
-    
-    uint64_t ubcinfo = rk64(textvp + offsetof_v_ubcinfo);
-
-    // Loop through all csblob entries (linked list) and update
-    // all (they must match by design)
-    uint64_t csblob = rk64(ubcinfo + offsetof_ubcinfo_csblobs);
-    while (csblob != 0) {
-        wk32(csblob + offsetof_csb_platform_binary, 1);
-        
-        csblob = rk64(csblob);
-    }
-}
-
 const char* abs_path_exceptions[] = {
     "/Library",
     "/private/var/mobile/Library",
-    "/private/var/mnt",
     NULL
 };
 
@@ -175,7 +144,6 @@ uint64_t get_exception_osarray(void) {
             "<array>"
             "<string>/Library/</string>"
             "<string>/private/var/mobile/Library/</string>"
-            "<string>/private/var/mnt/</string>"
             "</array>"
         );
     }
@@ -220,16 +188,6 @@ void set_amfi_entitlements(uint64_t proc) {
 
     int rv = 0;
     
-    rv = OSDictionary_SetItem(amfi_entitlements, "get-task-allow", offset_osboolean_true);
-    if (rv != 1) {
-        DEBUGLOG("failed to set get-task-allow within amfi_entitlements!");;
-    }
-    
-    rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.skip-library-validation", offset_osboolean_true);
-    if (rv != 1) {
-        DEBUGLOG("failed to set com.apple.private.skip-library-validation within amfi_entitlements!");
-    }
-    
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
@@ -269,20 +227,48 @@ void set_amfi_entitlements(uint64_t proc) {
     }
 }
 
-void platformize(int pd) {
-    uint64_t proc = proc_find(pd);
+void fixup_tfplatform(uint64_t proc) {
+    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
+
+    uint64_t key = OSDictionary_GetItem(amfi_entitlements, "platform-application");
+    if (key == offset_osboolean_true) {
+        DEBUGLOG("platform-application is set");
+        set_tfplatform(proc);
+
+        uint32_t csflags = rk32(proc + offsetof_p_csflags);
+        csflags |= CS_PLATFORM_BINARY;
+        wk32(proc + offsetof_p_csflags, csflags);
+    } else {
+        DEBUGLOG("platform-application is not set");
+    }
+}
+
+void fixup_sandbox(uint64_t proc) {
+    set_sandbox_extensions(proc);
+}
+
+void fixup_cs_valid(uint64_t proc) {
+    uint32_t csflags = rk32(proc + offsetof_p_csflags);
+
+    csflags |= CS_VALID;
+    
+    wk32(proc + offsetof_p_csflags, csflags);
+}
+
+void fixup(int pid) {
+    uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        DEBUGLOG("failed to find proc for pid %d!", pd);
+        DEBUGLOG("failed to find proc for pid %d!", pid);
         return;
     }
-    
-    DEBUGLOG("platformize called for %d (proc: %llx)", pd, proc);
-    
-    set_csflags(proc);
-    if (kCFCoreFoundationVersionNumber >= 1443.00) {
-        set_tfplatform(proc);
-    }
+
+    DEBUGLOG("fixup_setuid");
+    fixup_setuid(pid, proc);
+    DEBUGLOG("fixup_sandbox");
+    fixup_sandbox(proc);
+    DEBUGLOG("fixup_tfplatform");
+    fixup_tfplatform(proc);
+    DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc);
-    set_sandbox_extensions(proc);
-    set_csblob(proc);
 }
