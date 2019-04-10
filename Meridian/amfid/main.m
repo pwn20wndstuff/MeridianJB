@@ -19,15 +19,16 @@
 #include <pthread.h>
 #include <Foundation/Foundation.h>
 #include <CommonCrypto/CommonDigest.h>
-#include "fishhook.h"
 #include "kern_utils.h"
 #include "kexecute.h"
 #include "kmem.h"
 #include "ent_patching.h"
 #include "common.h"
+#include "substitute.h"
+
+extern int MISValidateSignatureAndCopyInfo(NSString* file, NSDictionary* options, NSMutableDictionary** info);
 
 int (*old_MISValidateSignatureAndCopyInfo)(NSString* file, NSDictionary* options, NSMutableDictionary** info);
-int (*old_MISValidateSignatureAndCopyInfo_broken)(NSString* file, NSDictionary* options, NSMutableDictionary** info);
 
 int fake_MISValidateSignatureAndCopyInfo(NSString* file, NSDictionary* options, NSMutableDictionary** info) {
     const char *file_path = [file UTF8String];
@@ -158,18 +159,24 @@ static void ctor(void) {
         init_kexecute();
     }
     
-    // This is some wicked crazy shit that needs to happen to correctly patch
-    // after amfid has been killed & launched & patched again... it's nuts.
-    // shouldn't even work. creds whoever came up w this @ ElectraTeam
-    void *libmis = dlopen("/usr/lib/libmis.dylib", RTLD_NOW);
-    old_MISValidateSignatureAndCopyInfo = dlsym(libmis, "MISValidateSignatureAndCopyInfo");
+    void *handle = dlopen("/usr/lib/libsubstitute.dylib", RTLD_NOW);
+    if (!handle) {
+        ERROR("%s", dlerror());
+        return;
+    }
+    int (*substitute_hook_functions)(const struct substitute_function_hook *hooks, size_t nhooks, struct substitute_function_hook_record **recordp, int options) = dlsym(handle, "substitute_hook_functions");
+    if (!substitute_hook_functions) {
+        ERROR("%s", dlerror());
+        return;
+    }
     
-    struct rebinding rebindings[] = {
-        { "MISValidateSignatureAndCopyInfo", (void *)fake_MISValidateSignatureAndCopyInfo, (void **)&old_MISValidateSignatureAndCopyInfo_broken }
-        /*                                                                                                       you can say that again  ^^^^^^ */
-    };
+    struct substitute_function_hook mvsaci_hook;
+    mvsaci_hook.function = MISValidateSignatureAndCopyInfo;
+    mvsaci_hook.replacement = fake_MISValidateSignatureAndCopyInfo;
+    mvsaci_hook.old_ptr = &old_MISValidateSignatureAndCopyInfo;
+    mvsaci_hook.options = 0;
+    substitute_hook_functions(&mvsaci_hook, 1, NULL, SUBSTITUTE_NO_THREAD_SAFETY);
     
-    rebind_symbols(rebindings, 1);
     INFO("functions have been hooked! get fucked, codesigning :-)");
     
     // touch file so Meridian know's we're alive in here

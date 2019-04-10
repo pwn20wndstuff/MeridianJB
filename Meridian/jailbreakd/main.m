@@ -77,7 +77,7 @@ int handle_command(uint8_t command, uint32_t pid) {
                 }
                 
                 usleep(1000);
-            } while (strcmp(pathbuf, "/usr/libexec/xpcproxy") == 0);
+            } while (strcmp(pathbuf, "/usr/libexec/xpcproxy") == 0 || strcmp(pathbuf, "/usr/libexec/xpcproxy.patched") == 0);
             
             DEBUGLOG(true, "xpcproxy has morphed to: %s", pathbuf);
             platformize(pid);
@@ -111,18 +111,31 @@ int main(int argc, char **argv, char **envp) {
     unlink("/var/tmp/jailbreakd.pid");
     
     // Parse offsets from env var's
-    kernel_base             = strtoull(getenv("KernelBase"),        NULL, 16);
-    kernel_slide            = kernel_base - 0xFFFFFFF007004000;
+    kernel_base = strtoull(getenv("KernelBase"), NULL, 16);
+    kernel_slide = kernel_base - 0xFFFFFFF007004000;
     DEBUGLOG(true, "kern base: %llx, slide: %llx", kernel_base, kernel_slide);
     
-    kernprocaddr            = strtoull(getenv("KernProcAddr"),      NULL, 16);
-    offset_zonemap          = strtoull(getenv("ZoneMapOffset"),     NULL, 16);
+    kernprocaddr = strtoull(getenv("KernProcAddr"), NULL, 16);
+    offset_zonemap = strtoull(getenv("ZoneMapOffset"), NULL, 16);
     
-    offset_add_ret_gadget   = strtoull(getenv("AddRetGadget"),      NULL, 16);
-    offset_osboolean_true   = strtoull(getenv("OSBooleanTrue"),     NULL, 16);
-    offset_osboolean_false  = strtoull(getenv("OSBooleanFalse"),    NULL, 16);
-    offset_osunserializexml = strtoull(getenv("OSUnserializeXML"),  NULL, 16);
-    offset_smalloc          = strtoull(getenv("Smalloc"),           NULL, 16);
+    offset_add_ret_gadget = strtoull(getenv("AddRetGadget"), NULL, 16);
+    offset_osboolean_true = strtoull(getenv("OSBooleanTrue"), NULL, 16);
+    offset_osboolean_false = strtoull(getenv("OSBooleanFalse"), NULL, 16);
+    offset_osunserializexml = strtoull(getenv("OSUnserializeXML"), NULL, 16);
+    offset_smalloc = strtoull(getenv("Smalloc"), NULL, 16);
+    offset_kernel_task = strtoull(getenv("KernelTask"), NULL, 16);
+    offset_paciza_pointer__l2tp_domain_module_start = strtoull(getenv("PacizaPointerL2TPDomainModuleStart"), NULL, 16);
+    offset_paciza_pointer__l2tp_domain_module_stop = strtoull(getenv("PacizaPointerL2TPDomainModuleStop"), NULL, 16);
+    offset_l2tp_domain_inited = strtoull(getenv("L2TPDomainInited"), NULL, 16);
+    offset_sysctl__net_ppp_l2tp = strtoull(getenv("SysctlNetPPPL2TP"), NULL, 16);
+    offset_sysctl_unregister_oid = strtoull(getenv("SysctlUnregisterOid"), NULL, 16);
+    offset_mov_x0_x4__br_x5 = strtoull(getenv("MovX0X4BrX5"), NULL, 16);
+    offset_mov_x9_x0__br_x1 = strtoull(getenv("MovX9X0BrX1"), NULL, 16);
+    offset_mov_x10_x3__br_x6 = strtoull(getenv("MovX10X3BrX6"), NULL, 16);
+    offset_kernel_forge_pacia_gadget = strtoull(getenv("KernelForgePaciaGadget"), NULL, 16);
+    offset_kernel_forge_pacda_gadget = strtoull(getenv("KernelForgePacdaGadget"), NULL, 16);
+    offset_IOUserClient__vtable = strtoull(getenv("IOUserClientVtable"), NULL, 16);
+    offset_IORegistryEntry__getRegistryEntryID = strtoull(getenv("IORegistryEntryGetRegistryEntryID"), NULL, 16);
     
     // tfp0, patchfinder, kexecute
     err = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);

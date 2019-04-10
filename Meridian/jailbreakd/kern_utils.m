@@ -23,13 +23,26 @@ uint64_t offset_osboolean_true;
 uint64_t offset_osboolean_false;
 uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
+uint64_t offset_kernel_task;
+uint64_t offset_paciza_pointer__l2tp_domain_module_start;
+uint64_t offset_paciza_pointer__l2tp_domain_module_stop;
+uint64_t offset_l2tp_domain_inited;
+uint64_t offset_sysctl__net_ppp_l2tp;
+uint64_t offset_sysctl_unregister_oid;
+uint64_t offset_mov_x0_x4__br_x5;
+uint64_t offset_mov_x9_x0__br_x1;
+uint64_t offset_mov_x10_x3__br_x6;
+uint64_t offset_kernel_forge_pacia_gadget;
+uint64_t offset_kernel_forge_pacda_gadget;
+uint64_t offset_IOUserClient__vtable;
+uint64_t offset_IORegistryEntry__getRegistryEntryID;
 
 // Please call `proc_release` after you are finished with your proc!
 uint64_t proc_find(int pd) {
     uint64_t proc = kernprocaddr;
     
     while (proc) {
-        uint32_t found_pid = rk32(proc + 0x10);
+        uint32_t found_pid = rk32(proc + offsetof_p_pid);
         
         if (found_pid == pd) {
             return proc;
@@ -45,7 +58,7 @@ CACHED_FIND(uint64_t, our_task_addr) {
     uint64_t proc = rk64(kernprocaddr + 0x8);
     
     while (proc) {
-        uint32_t proc_pid = rk32(proc + 0x10);
+        uint32_t proc_pid = rk32(proc + offsetof_p_pid);
         
         if (proc_pid == getpid()) {
             break;
@@ -55,7 +68,7 @@ CACHED_FIND(uint64_t, our_task_addr) {
     }
     
     if (proc == 0) {
-        fprintf(stdout, "failed to find our_task_addr!\n");
+        DEBUGLOG(false, "failed to find our_task_addr!");
         exit(EXIT_FAILURE);
     }
 
@@ -81,33 +94,33 @@ void fixupsetuid(int pid) {
     
     int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
     if (ret < 0) {
-        fprintf(stderr, "Unable to get path for PID %d \n", pid);
+        DEBUGLOG(false, "Unable to get path for PID %d", pid);
         return;
     }
     
     struct stat file_st;
     if (lstat(pathbuf, &file_st) == -1) {
-        fprintf(stderr, "Unable to get stat for file %s \n", pathbuf);
+        DEBUGLOG(false, "Unable to get stat for file %s", pathbuf);
         return;
     }
     
     if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
-        fprintf(stderr, "File is not setuid or setgid: %s \n", pathbuf);
+        DEBUGLOG(false, "File is not setuid or setgid: %s", pathbuf);
         return;
     }
     
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        fprintf(stderr, "Unable to find proc for pid %d \n", pid);
+        DEBUGLOG(false, "Unable to find proc for pid %d", pid);
         return;
     }
     
-    fprintf(stderr, "Found proc %llx for pid %d \n", proc, pid);
+    DEBUGLOG(false, "Found proc %llx for pid %d", proc, pid);
     
     uid_t fileUid = file_st.st_uid;
-    uid_t fileGid = file_st.st_gid;
+    gid_t fileGid = file_st.st_gid;
     
-    fprintf(stderr, "Applying UID %d to process %d", fileUid, pid);
+    DEBUGLOG(false, "Applying UID %d to process %d", fileUid, pid);
     uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
 		if (file_st.st_mode & S_ISUID) {
@@ -124,7 +137,7 @@ void fixupsetuid(int pid) {
 }
 
 void set_csflags(uint64_t proc) {
-    uint32_t pid = rk32(proc + 0x10);
+    uint32_t pid = rk32(proc + offsetof_p_pid);
     
     uint32_t csflags = rk32(proc + offsetof_p_csflags);
 
@@ -164,6 +177,7 @@ const char* abs_path_exceptions[] = {
     "/Library",
     "/private/var/mobile/Library",
     "/private/var/mnt",
+    "/System/Library/Caches",
     NULL
 };
 
@@ -175,6 +189,7 @@ uint64_t get_exception_osarray(void) {
             "<string>/Library/</string>"
             "<string>/private/var/mobile/Library/</string>"
             "<string>/private/var/mnt/</string>"
+            "<string>/System/Library/Caches/</string>"
             "</array>"
         );
     }
@@ -186,7 +201,7 @@ static const char *exc_key = "com.apple.security.exception.files.absolute-path.r
 
 void set_sandbox_extensions(uint64_t proc) {
     DEBUGLOG(false, "set_sandbox_extensions called for %llx", proc);
-    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
     DEBUGLOG(false, "sandbox: %llx", sandbox);
     
@@ -216,7 +231,7 @@ void set_sandbox_extensions(uint64_t proc) {
 }
 
 void set_amfi_entitlements(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
 
     int rv = 0;
@@ -265,7 +280,7 @@ void set_amfi_entitlements(uint64_t proc) {
     }
 
     if (rv != 1) {
-        DEBUGLOG(false, "Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx\n", amfi_entitlements, present);
+        DEBUGLOG(false, "Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx", amfi_entitlements, present);
     }
 }
 

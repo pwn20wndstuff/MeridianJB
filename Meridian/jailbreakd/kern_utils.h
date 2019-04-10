@@ -111,10 +111,25 @@ extern uint64_t offset_osboolean_true;
 extern uint64_t offset_osboolean_false;
 extern uint64_t offset_osunserializexml;
 extern uint64_t offset_smalloc;
+extern uint64_t offset_kernel_task;
+extern uint64_t offset_paciza_pointer__l2tp_domain_module_start;
+extern uint64_t offset_paciza_pointer__l2tp_domain_module_stop;
+extern uint64_t offset_l2tp_domain_inited;
+extern uint64_t offset_sysctl__net_ppp_l2tp;
+extern uint64_t offset_sysctl_unregister_oid;
+extern uint64_t offset_mov_x0_x4__br_x5;
+extern uint64_t offset_mov_x9_x0__br_x1;
+extern uint64_t offset_mov_x10_x3__br_x6;
+extern uint64_t offset_kernel_forge_pacia_gadget;
+extern uint64_t offset_kernel_forge_pacda_gadget;
+extern uint64_t offset_IOUserClient__vtable;
+extern uint64_t offset_IORegistryEntry__getRegistryEntryID;
 
 uint64_t find_port(mach_port_name_t port);
 
 uint64_t proc_find(int pd);
+
+uint64_t our_task_addr(void);
 
 void platformize(int pd);
 void fixupsetuid(int pid);

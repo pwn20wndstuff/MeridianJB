@@ -7,8 +7,8 @@
 
 #include <mach/mach.h>
 
-#include "fishhook.h"
 #include "jailbreak_daemonUser.h"
+#include "substitute.h"
 
 #define LAUNCHD_LOG_PATH    "/var/log/pspawn_hook_launchd.log"
 #define XPCPROXY_LOG_PATH   "/var/log/pspawn_hook_xpcproxy.log"
@@ -64,22 +64,25 @@ dispatch_queue_t queue = NULL;
 #define PSPAWN_HOOK_DYLIB       (const char *)("/usr/lib/pspawn_hook.dylib")
 #define TWEAKLOADER_DYLIB       (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/usr/lib/tweakloader.dylib" : "/usr/lib/TweakLoader.dylib")
 #define LIBJAILBREAK_DYLIB      (const char *)("/usr/lib/libjailbreak.dylib")
-#define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/Library/MobileSubstrate/DynamicLibraries/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
+#define AMFID_PAYLOAD_DYLIB     (const char *)((kCFCoreFoundationVersionNumber >= 1443.00) ? "/usr/lib/amfid_payload.dylib" : "/meridian/amfid_payload.dylib")
+#define DISABLE_LOADER_FILE     (const char *)("/var/tmp/.pspawn_disable_loader")
 
 bool get_jbd_port();
 
 const char *xpcproxy_blacklist[] = {
-    "com.apple.diagnosticd",    // syslog
-    "com.apple.logd",   	// logd - things that log when this is starting end badly so...
+    "diagnosticd",    // syslog
+    "logd",   	// logd - things that log when this is starting end badly so...
     "MTLCompilerService",
     "mapspushd",                // stupid Apple Maps
-    "com.apple.notifyd",        // fuck this daemon and everything it stands for
+    "notifyd",        // fuck this daemon and everything it stands for
     "OTAPKIAssetTool",
     "FileProvider",             // seems to crash from oosb r/w etc
     "jailbreakd",               // gotta call to this
     "dropbear",
     "cfprefsd",
     "debugserver",
+    "securityd",
+    "trustd",
     NULL
 };
 
@@ -147,7 +150,7 @@ int fake_posix_spawn_common(pid_t *pid,
                 inject[ninject++] = AMFID_PAYLOAD_DYLIB;
                 break;
             }
-            if (access(TWEAKLOADER_DYLIB, F_OK) == 0) {
+            if (!is_blacklisted(path) && access(TWEAKLOADER_DYLIB, F_OK) == 0 && access(DISABLE_LOADER_FILE, F_OK) != 0) {
                 inject[ninject++] = TWEAKLOADER_DYLIB;
             }
             break;
@@ -308,13 +311,51 @@ int fake_posix_spawnp(pid_t *pid,
     return fake_posix_spawn_common(pid, file, file_actions, attrp, argv, envp, old_pspawnp);
 }
 
-void rebind_pspawns(void) {
-    struct rebinding rebindings[] = {
-        { "posix_spawn",  (void *)fake_posix_spawn,  (void **)&old_pspawn },
-        { "posix_spawnp", (void *)fake_posix_spawnp, (void **)&old_pspawnp }
-    };
+void entitle(pid_t pid) {
+    if (access(LIBJAILBREAK_DYLIB, F_OK) != 0) {
+        printf("[!] %s was not found!\n", LIBJAILBREAK_DYLIB);
+        return;
+    }
     
-    rebind_symbols(rebindings, 2);
+    void *handle = dlopen(LIBJAILBREAK_DYLIB, RTLD_LAZY);
+    if (handle == NULL) {
+        printf("[!] Failed to open libjailbreak.dylib: %s\n", dlerror());
+        return;
+    }
+    
+    typedef int (*entitle_t)(pid_t pid, uint32_t flags);
+    entitle_t entitle_ptr = (entitle_t)dlsym(handle, "jb_oneshot_entitle_now");
+    entitle_ptr(pid, FLAG_PLATFORMIZE);
+    printf("[!] Platformized.\n");
+}
+
+void hook_pspawns(void) {
+    entitle(getpid());
+    
+    void *handle = dlopen("/usr/lib/libsubstitute.dylib", RTLD_NOW);
+    if (!handle) {
+        DEBUGLOG("%s", dlerror());
+        return;
+    }
+    int (*substitute_hook_functions)(const struct substitute_function_hook *hooks, size_t nhooks, struct substitute_function_hook_record **recordp, int options) = dlsym(handle, "substitute_hook_functions");
+    if (!substitute_hook_functions) {
+        DEBUGLOG("%s", dlerror());
+        return;
+    }
+    
+    struct substitute_function_hook ps_hook;
+    ps_hook.function = posix_spawn;
+    ps_hook.replacement = fake_posix_spawn;
+    ps_hook.old_ptr = &old_pspawn;
+    ps_hook.options = 0;
+    substitute_hook_functions(&ps_hook, 1, NULL, SUBSTITUTE_NO_THREAD_SAFETY);
+    
+    struct substitute_function_hook psp_hook;
+    psp_hook.function = posix_spawnp;
+    psp_hook.replacement = fake_posix_spawnp;
+    psp_hook.old_ptr = &old_pspawnp;
+    psp_hook.options = 0;
+    substitute_hook_functions(&psp_hook, 1, NULL, SUBSTITUTE_NO_THREAD_SAFETY);
 }
 
 bool get_jbd_port() {
@@ -342,7 +383,8 @@ static void ctor(void) {
     
     if (getpid() == 1) {
         current_process = PROCESS_LAUNCHD;
-    } else if (strcmp(pathbuf, "/usr/libexec/xpcproxy") == 0) {
+    } else if (strcmp(pathbuf, "/usr/libexec/xpcproxy") == 0 ||
+               strcmp(pathbuf, "/usr/libexec/xpcproxy.patched") == 0) {
         current_process = PROCESS_XPCPROXY;
     } else {
         current_process = PROCESS_OTHER;
@@ -354,7 +396,7 @@ static void ctor(void) {
     
     if (current_process == PROCESS_LAUNCHD) {
         if (get_jbd_port())
-            rebind_pspawns();
+            hook_pspawns();
         return;
     }
     
@@ -377,25 +419,11 @@ static void ctor(void) {
     // example (in shell): "> DYLD_INSERT_LIBRARIES=/usr/lib/pspawn_hook.dylib binary"
     // this will have <binary> call to jbd in order to platformize
     if (current_process == PROCESS_OTHER) {
-        if (access(LIBJAILBREAK_DYLIB, F_OK) != 0) {
-            printf("[!] %s was not found!\n", LIBJAILBREAK_DYLIB);
-            return;
-        }
-        
-        void *handle = dlopen(LIBJAILBREAK_DYLIB, RTLD_LAZY);
-        if (handle == NULL) {
-            printf("[!] Failed to open libjailbreak.dylib: %s\n", dlerror());
-            return;
-        }
-        
-        typedef int (*entitle_t)(pid_t pid, uint32_t flags);
-        entitle_t entitle_ptr = (entitle_t)dlsym(handle, "jb_oneshot_entitle_now");
-        entitle_ptr(getpid(), FLAG_PLATFORMIZE);
-        printf("[!] Platformized.\n");
+        entitle(getpid());
         return;
     }
     
-    rebind_pspawns();
+    hook_pspawns();
     int stampfd = open("/var/run/pspawn_hook.ts", O_CREAT|O_WRONLY|O_TRUNC);
     if (stampfd == -1)
         return;

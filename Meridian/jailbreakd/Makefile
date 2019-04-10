@@ -3,10 +3,10 @@ OUTDIR ?= bin
 PREFIX ?= /meridian
 SRC     = $(wildcard *.c) $(wildcard *.m) $(wildcard */*.c) $(wildcard */*.m)
 
-CC      = xcrun -sdk iphoneos gcc -arch arm64
+CC      = xcrun -sdk iphoneos gcc -arch arm64 -arch arm64e
 LDID    = ldid
 CHMOD   = chmod
-CFLAGS  = -I. -I./helpers -I./mach -framework Foundation -framework IOKit
+CFLAGS  = -I. -I./helpers -I./kernel_call -I./mach -framework Foundation -framework IOKit
 
 .PHONY: all install clean
 

